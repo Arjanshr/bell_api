@@ -41,7 +41,7 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            'url' => rtrim(env('APP_URL', 'http://localhost'), '/') . '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,
@@ -59,6 +59,14 @@ return [
             'throw' => false,
             'report' => false,
         ],
+        // existing disks...
+        'bell_media' => [
+            'driver' => 'local',
+            'root' => '/home/mobilemandu/public_html/storage/app/public', // point to MM storage
+            'url' => env('BELL_ASSET_URL'),
+            'visibility' => 'public',
+        ],
+
 
     ],
 
@@ -76,5 +84,7 @@ return [
     'links' => [
         public_path('storage') => storage_path('app/public'),
     ],
+
+
 
 ];
