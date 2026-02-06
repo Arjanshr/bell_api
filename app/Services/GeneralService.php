@@ -2,51 +2,50 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+
 class GeneralService
 {
-
-
-    public function getModels($path)
+    /**
+     * Get all model class names from app/Models
+     */
+    public function getModels(string $path): array
     {
-        $path = app_path() . "/Models";
-        $out = [];
-        $results = scandir($path);
-        foreach ($results as $result) {
-            if ($result === '.' or $result === '..') continue;
-            $filename = $path . '/' . $result;
-            if (is_dir($filename)) {
-                $out = array_merge($out, $this->getModels($filename));
-            } else {
-                $out[] = substr($filename, 0, -4);
+        $models = [];
+
+        if (!File::exists($path)) {
+            return $models;
+        }
+
+        foreach (File::allFiles($path) as $file) {
+            // Ignore non-php files
+            if ($file->getExtension() !== 'php') {
+                continue;
             }
+
+            // Get file name without extension (User, OrderItem, etc.)
+            $models[] = pathinfo($file->getFilename(), PATHINFO_FILENAME);
         }
-        foreach ($out as $o) {
-            $explode = explode('\\', $o);
-            $data[] = explode('/', $explode[4])[2];
-        }
-        return $data;
+
+        return $models;
     }
 
-    public function pluralize($quantity, $singular, $plural = null)
+    /**
+     * Convert CamelCase to kebab-case
+     * Example: OrderItem -> order-item
+     */
+    public function convertCamelCase(string $value): string
     {
-        if ($quantity == 1 || !strlen($singular)) return $singular;
-        if ($plural !== null) return $plural;
-        // return $singular;
-        $last_letter = strtolower(substr($singular, -1));
-        switch ($last_letter) {
-            case 'y':
-                return substr($singular, 0, -1) . 'ies';
-            case 's':
-                return $singular . 'es';
-            default:
-                return $singular . 's';
-        }
+        return Str::kebab($value);
     }
 
-    public function convertCamelCase($string)
+    /**
+     * Pluralize a word
+     * Example: user -> users
+     */
+    public function pluralize(int $count, string $value): string
     {
-        $splits = preg_split('#([A-Z][^A-Z]*)#', $string, 0, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
-        $array = implode('-', $splits);
-        return strtolower($array);
+        return Str::plural($value, $count);
     }
 }
