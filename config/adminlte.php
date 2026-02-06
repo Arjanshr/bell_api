@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'title' => 'Mobile Mandu',
+    'title' => 'Bell',
     'title_prefix' => '',
     'title_postfix' => '',
 
@@ -62,7 +62,7 @@ return [
     |
     */
 
-    'logo' => '<b>Mobile</b> Mandu',
+    'logo' => '<b>Bell</b> Nepal',
     'logo_img' => 'vendor/adminlte/dist/img/AdminLTELogo.png',
     'logo_img_class' => 'brand-image img-circle elevation-3',
     'logo_img_xl' => null,
@@ -551,71 +551,71 @@ return [
                 ],
             ],
         ],
-        [
-            'header' => 'BANKS',
-            'key' => 'banks',
-            'can' => ['browse-banks'],
-        ],
-        [
-            'text' => 'Banks',
-            'icon' => 'fas fa-university', // bank icon
-            'submenu' => [
-                [
-                    'icon' => 'fas fa-list', // list icon
-                    'text' => 'Manage Banks',
-                    'url' => 'admin/banks',
-                    'can' => ['browse-banks'],
-                    'active' => ['banks', 'banks*', 'regex:@^banks/[0-9]+$@'],
-                ],
-                [
-                    'icon' => 'fas fa-clock',
-                    'text' => 'Manage Tenures',
-                    'url' => 'admin/banks/tenures',
-                    'can' => ['browse-banks'],
-                    'active' => ['banks/tenures', 'banks/tenures*'],
-                ],
-                [
-                    'icon' => 'fas fa-file-invoice-dollar',
-                    'text' => 'Processing Fee Rules',
-                    'url' => 'admin/banks/processing-fee-rules',
-                    'can' => ['browse-banks'],
-                    'active' => ['banks/processing-fee-rules', 'banks/processing-fee-rules*'],
-                ],
-            ],
-        ],
-        [
-            'header' => 'LOCATIONS',
-            'can' => ['browse-locations'],
-        ],
-        [
-            'text' => 'Locations',
-            'icon' => 'fas fa-map-marked-alt',
-            'can' => ['browse-locations'],
-            'submenu' => [
-                [
-                    'can' => ['browse-provinces'],
-                    'icon' => 'fas fa-flag',
-                    'text' => 'Provinces',
-                    'url' => 'admin/locations/provinces',
-                    'active' => ['locations/provinces', 'locations/provinces*'],
-                ],
-                [
+        // [
+        //     'header' => 'BANKS',
+        //     'key' => 'banks',
+        //     'can' => ['browse-banks'],
+        // ],
+        // [
+        //     'text' => 'Banks',
+        //     'icon' => 'fas fa-university', // bank icon
+        //     'submenu' => [
+        //         [
+        //             'icon' => 'fas fa-list', // list icon
+        //             'text' => 'Manage Banks',
+        //             'url' => 'admin/banks',
+        //             'can' => ['browse-banks'],
+        //             'active' => ['banks', 'banks*', 'regex:@^banks/[0-9]+$@'],
+        //         ],
+        //         [
+        //             'icon' => 'fas fa-clock',
+        //             'text' => 'Manage Tenures',
+        //             'url' => 'admin/banks/tenures',
+        //             'can' => ['browse-banks'],
+        //             'active' => ['banks/tenures', 'banks/tenures*'],
+        //         ],
+        //         [
+        //             'icon' => 'fas fa-file-invoice-dollar',
+        //             'text' => 'Processing Fee Rules',
+        //             'url' => 'admin/banks/processing-fee-rules',
+        //             'can' => ['browse-banks'],
+        //             'active' => ['banks/processing-fee-rules', 'banks/processing-fee-rules*'],
+        //         ],
+        //     ],
+        // ],
+        // [
+        //     'header' => 'LOCATIONS',
+        //     'can' => ['browse-locations'],
+        // ],
+        // [
+        //     'text' => 'Locations',
+        //     'icon' => 'fas fa-map-marked-alt',
+        //     'can' => ['browse-locations'],
+        //     'submenu' => [
+        //         [
+        //             'can' => ['browse-provinces'],
+        //             'icon' => 'fas fa-flag',
+        //             'text' => 'Provinces',
+        //             'url' => 'admin/locations/provinces',
+        //             'active' => ['locations/provinces', 'locations/provinces*'],
+        //         ],
+        //         [
 
-                    'can' => ['browse-cities'],
-                    'icon' => 'fas fa-city',
-                    'text' => 'Cities',
-                    'url' => 'admin/locations/cities',
-                    'active' => ['locations/cities', 'locations/cities*'],
-                ],
-                [
-                    'can' => ['browse-areas'],
-                    'icon' => 'fas fa-map-pin',
-                    'text' => 'Areas',
-                    'url' => 'admin/locations/areas',
-                    'active' => ['locations/areas', 'locations/areas*'],
-                ],
-            ],
-        ],
+        //             'can' => ['browse-cities'],
+        //             'icon' => 'fas fa-city',
+        //             'text' => 'Cities',
+        //             'url' => 'admin/locations/cities',
+        //             'active' => ['locations/cities', 'locations/cities*'],
+        //         ],
+        //         [
+        //             'can' => ['browse-areas'],
+        //             'icon' => 'fas fa-map-pin',
+        //             'text' => 'Areas',
+        //             'url' => 'admin/locations/areas',
+        //             'active' => ['locations/areas', 'locations/areas*'],
+        //         ],
+        //     ],
+        // ],
 
         [
             'header' => 'Reports',
@@ -657,28 +657,28 @@ return [
             'icon'    => 'fas fa-cogs', // Updated icon for Settings
             'can' => 'browse-settings',
             'submenu' => [
+                // [
+                //     'can' => 'browse-settings',
+                //     'text' => 'Manage Setting Form',
+                //     'url'  => 'admin/settings',
+                //     'icon' => 'fas fa-sliders-h', // Updated icon for managing Settings
+                // ],
                 [
                     'can' => 'browse-settings',
-                    'text' => 'Manage Setting Form',
-                    'url'  => 'admin/settings',
-                    'icon' => 'fas fa-sliders-h', // Updated icon for managing Settings
+                    'text' => 'Manage Cancellation Categories',
+                    'url'  => 'admin/order-cancellation-categories',
+                    'icon' => 'fas fa-ban',
+                    'active' => ['order-cancellation-categories', 'order-cancellation-categories*'],
                 ],
-                    [
-                        'can' => 'browse-settings',
-                        'text' => 'Manage Cancellation Categories',
-                        'url'  => 'admin/order-cancellation-categories',
-                        'icon' => 'fas fa-ban',
-                        'active' => ['order-cancellation-categories', 'order-cancellation-categories*'],
-                    ],
             ],
         ],
-        [
-            'can' => 'browse-general-settings',
-            'text' => 'General Settings',
-            'url'  => 'admin/settings/general',
-            'icon' => 'fas fa-tools', // Updated icon for General Settings
-        ],
-        
+        // [
+        //     'can' => 'browse-general-settings',
+        //     'text' => 'General Settings',
+        //     'url'  => 'admin/settings/general',
+        //     'icon' => 'fas fa-tools', // Updated icon for General Settings
+        // ],
+
     ],
 
     /*

@@ -15,8 +15,8 @@
                             <div class="card-header">
                                 <div class="row align-items-center">
                                     <div class="col-md-4 mb-2">
-                                        <a href="{{ route('product.create') }}" class="btn btn-success btn-sm" title="Create Product">
-                                            <i class="fas fa-plus-circle"></i> Create Product
+                                        <a href="{{ route('product.sync') }}" class="btn btn-success btn-sm" title="Sync Products">
+                                            <i class="fas fa-sync-alt"></i> Sync Products
                                         </a>
                                         @can('export-products')
                                         <a href="{{ route('product.export', request()->query()) }}" class="btn btn-info btn-sm ml-2" title="Export to CSV">
@@ -24,7 +24,7 @@
                                         </a>
                                         @endcan
                                     </div>
-                                    @can('import-products')
+                                    {{-- @can('import-products')
                                     <div class="col-md-4 mb-2 ml-auto">
                                         <form action="{{ route('product.import') }}" method="post" enctype="multipart/form-data" class="d-flex justify-content-end">
                                             @csrf
@@ -34,7 +34,7 @@
                                             </button>
                                         </form>
                                     </div>
-                                    @endcan
+                                    @endcan --}}
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-md-12">

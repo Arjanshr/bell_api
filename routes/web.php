@@ -250,6 +250,7 @@ Route::middleware([
     Route::delete('/brands/delete/{brand}', [BrandController::class, 'delete'])->name('brand.delete')->middleware('can:delete-brands');
 
     //Products routes
+    Route::get('products/sync', [ProductController::class, 'syncProducts'])->name('product.sync');
     Route::get('products/export', [ProductController::class, 'export'])->name('product.export');
     Route::get('/products', [ProductController::class, 'index'])->name('products')->middleware('can:browse-products');
     Route::middleware('can:add-products')->group(function () {

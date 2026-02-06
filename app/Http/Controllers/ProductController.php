@@ -9,11 +9,14 @@ use App\Models\Category;
 use App\Models\Feature;
 use App\Models\Product;
 use App\Models\ProductSpecification;
-use App\Models\SlugRedirect;
 use App\Models\Specification;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Exception;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
@@ -136,8 +139,8 @@ class ProductController extends Controller
                     }
                 });
             } else {
-                $plural_query = \Illuminate\Support\Str::plural($search_query);
-                $singular_query = \Illuminate\Support\Str::singular($search_query);
+                $plural_query = Str::plural($search_query);
+                $singular_query = Str::singular($search_query);
 
                 $category_ids = Category::where('name', 'like', '%' . $search_query . '%')
                     ->orWhere('name', 'like', '%' . $plural_query . '%')
@@ -217,8 +220,8 @@ class ProductController extends Controller
                         }
                     });
                 } else {
-                    $plural_query = \Illuminate\Support\Str::plural($query);
-                    $singular_query = \Illuminate\Support\Str::singular($query);
+                    $plural_query = Str::plural($query);
+                    $singular_query = Str::singular($query);
 
                     $category_ids = Category::where('name', 'like', '%' . $query . '%')
                         ->orWhere('name', 'like', '%' . $plural_query . '%')
@@ -304,6 +307,361 @@ class ProductController extends Controller
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"$filename\"",
         ]);
+    }
+
+    public function syncProducts()
+    {
+        $syncConnectionName = 'sync_dynamic';
+        if (!$this->setupSyncConnection($syncConnectionName)) {
+            return redirect()->back();
+        }
+
+        $brandSlug = env('SYNC_BRAND_SLUG');
+        $schema = DB::connection($syncConnectionName)->getSchemaBuilder();
+        
+        if (!$brandSlug) {
+            toastr()->error('Please set SYNC_BRAND_SLUG in your environment.');
+            return redirect()->back();
+        }
+
+        $externalBrand = DB::connection($syncConnectionName)->table('brands')
+            ->where('slug', $brandSlug)
+            ->orWhere('name', $brandSlug)
+            ->first();
+
+        if (!$externalBrand) {
+            toastr()->error('Brand not found on external database.');
+            return redirect()->back();
+        }
+
+        DB::beginTransaction();
+        try {
+            $localBrand = Brand::updateOrCreate(
+                ['name' => $externalBrand->name],
+                ['slug' => Str::slug($externalBrand->name)]
+            );
+
+            $extProducts = DB::connection($syncConnectionName)->table('products')->where('brand_id', $externalBrand->id)->get();
+            $categoryMap = [];
+            $specMap = [];
+
+            foreach ($extProducts as $ext) {
+                $product = $this->syncProduct($ext, $localBrand, $syncConnectionName, $schema, $categoryMap, $specMap);
+            }
+
+            DB::commit();
+            toastr()->success('Products synced successfully.');
+        } catch (Exception $e) {
+            DB::rollBack();
+            toastr()->error('Sync failed: ' . $e->getMessage());
+        }
+
+        return redirect()->back();
+    }
+
+    private function setupSyncConnection($syncConnectionName)
+    {
+        $baseConnectionName = config('database.default');
+        $baseConn = config('database.connections.' . $baseConnectionName, []);
+        $syncDatabase = env('SYNC_DB_DATABASE');
+
+        if (!$syncDatabase) {
+            toastr()->error('Please set SYNC_DB_DATABASE in your environment.');
+            return false;
+        }
+
+        config(['database.connections.' . $syncConnectionName => array_merge($baseConn, ['database' => $syncDatabase])]);
+        return true;
+    }
+
+    private function syncProduct($ext, $localBrand, $syncConnectionName, $schema, &$categoryMap, &$specMap)
+    {
+        $productData = [
+            'name' => $ext->name,
+            'brand_id' => $localBrand->id,
+            'description' => $ext->description ?? null,
+            'short_description' => $ext->short_description ?? null,
+            'price' => $ext->price ?? 0,
+            'warranty' => $ext->warranty ?? null,
+            'status' => $ext->status ?? 'draft',
+            'in_stock' => $ext->in_stock ?? 0,
+            'alt_text' => $ext->alt_text ?? null,
+            'keywords' => $ext->keywords ?? null,
+            'slug' => $ext->slug ? Str::slug($ext->slug) : Str::slug($ext->name),
+            'sku' => $ext->sku ?? null,
+        ];
+
+        $product = Product::updateOrCreate(['slug' => $productData['slug']], $productData);
+
+        $this->syncProductCategories($product, $ext, $syncConnectionName, $schema, $categoryMap, $specMap);
+        $this->syncProductSpecifications($product, $ext, $syncConnectionName, $specMap);
+        $this->syncProductFeatures($product, $ext, $syncConnectionName);
+        $this->syncProductVariants($product, $ext, $syncConnectionName, $schema, $specMap);
+        $this->syncProductImages($product, $ext, $syncConnectionName, $schema);
+
+        return $product;
+    }
+
+    private function syncProductCategories($product, $ext, $syncConnectionName, $schema, &$categoryMap, &$specMap)
+    {
+        $pivotTable = null;
+        foreach (['category_product', 'product_category'] as $t) {
+            if ($schema->hasTable($t)) { $pivotTable = $t; break; }
+        }
+        
+        if (!$pivotTable) return;
+
+        $ext_cat_ids = DB::connection($syncConnectionName)->table($pivotTable)->where('product_id', $ext->id)->pluck('category_id')->toArray();
+        $local_cat_ids = [];
+        $allMappedLocalCatIds = [];
+
+        $mapCategory = function ($extCatId) use (&$categoryMap, &$allMappedLocalCatIds, $syncConnectionName, &$mapCategory) {
+            if (isset($categoryMap[$extCatId])) return $categoryMap[$extCatId];
+            
+            $extCat = DB::connection($syncConnectionName)->table('categories')->where('id', $extCatId)->first();
+            if (!$extCat) return null;
+
+            $parentLocalId = null;
+            if (isset($extCat->parent_id) && $extCat->parent_id) {
+                $parentLocalId = $mapCategory($extCat->parent_id);
+            }
+
+            $localCat = Category::updateOrCreate(
+                ['name' => $extCat->name],
+                ['slug' => Str::slug($extCat->name), 'parent_id' => $parentLocalId]
+            );
+            $categoryMap[$extCatId] = $localCat->id;
+            $allMappedLocalCatIds[] = $localCat->id;
+            return $localCat->id;
+        };
+
+        foreach ($ext_cat_ids as $cat_id) {
+            $localId = $mapCategory($cat_id);
+            if ($localId) $local_cat_ids[] = $localId;
+        }
+
+        if (!empty($local_cat_ids)) $product->categories()->sync($local_cat_ids);
+
+        if ($schema->hasTable('category_specification')) {
+            $this->syncCategorySpecifications($allMappedLocalCatIds, $categoryMap, $syncConnectionName, $specMap);
+        }
+    }
+
+    private function syncCategorySpecifications($allMappedLocalCatIds, $categoryMap, $syncConnectionName, &$specMap)
+    {
+        foreach (array_unique($allMappedLocalCatIds) as $localCatId) {
+            $localCategory = Category::findOrFail($localCatId);
+            $ext_cat_id = array_search($localCatId, $categoryMap);
+
+            if ($ext_cat_id === false) continue;
+
+            $ext_cat_specs = DB::connection($syncConnectionName)->table('category_specification')
+                ->where('category_id', $ext_cat_id)->get();
+
+            $syncData = [];
+            foreach ($ext_cat_specs as $cs) {
+                $localSpecId = $this->getOrCreateSpec($cs->specification_id, $syncConnectionName, $specMap);
+                if ($localSpecId) {
+                    $syncData[$localSpecId] = [
+                        'is_variant' => $cs->is_variant ?? false,
+                        'is_required' => $cs->is_required ?? false,
+                        'display_order' => $cs->display_order ?? 0,
+                    ];
+                }
+            }
+
+            if (!empty($syncData)) $localCategory->specifications()->sync($syncData);
+        }
+    }
+
+    private function syncProductSpecifications($product, $ext, $syncConnectionName, &$specMap)
+    {
+        if (!DB::connection($syncConnectionName)->getSchemaBuilder()->hasTable('product_specification')) return;
+
+        $ext_specs = DB::connection($syncConnectionName)->table('product_specification')->where('product_id', $ext->id)->get();
+        foreach ($ext_specs as $es) {
+            $localSpecId = $this->getOrCreateSpec($es->specification_id, $syncConnectionName, $specMap);
+            if ($localSpecId) {
+                ProductSpecification::updateOrCreate(
+                    ['product_id' => $product->id, 'specification_id' => $localSpecId],
+                    ['value' => $es->value]
+                );
+            }
+        }
+    }
+
+    private function syncProductFeatures($product, $ext, $syncConnectionName)
+    {
+        if (!DB::connection($syncConnectionName)->getSchemaBuilder()->hasTable('features')) return;
+
+        // Delete existing features to avoid duplicates on re-run
+        $product->features()->delete();
+
+        DB::connection($syncConnectionName)->table('features')->where('product_id', $ext->id)->get()->each(fn($f) => 
+            $product->features()->create(['feature' => $f->feature])
+        );
+    }
+
+    private function syncProductVariants($product, $ext, $syncConnectionName, $schema, &$specMap)
+    {
+        if (!$schema->hasTable('product_variants')) return;
+
+        $ext_variants = DB::connection($syncConnectionName)->table('product_variants')->where('product_id', $ext->id)->get();
+        foreach ($ext_variants as $v) {
+            $variant = $product->variants()->updateOrCreate(
+                ['sku' => $v->sku ?: uniqid('extvar_')],
+                ['price' => $v->price ?? 0, 'stock_quantity' => $v->stock_quantity ?? 0, 'sku' => $v->sku ?? null]
+            );
+            
+            if ($schema->hasTable('product_variant_options')) {
+                $ext_options = DB::connection($syncConnectionName)->table('product_variant_options')->where('product_variant_id', $v->id)->get();
+                foreach ($ext_options as $opt) {
+                    $localSpecId = $this->getOrCreateSpec($opt->specification_id, $syncConnectionName, $specMap);
+                    if ($localSpecId) {
+                        $variant->variant_options()->create(['specification_id' => $localSpecId, 'value' => $opt->value]);
+                    }
+                }
+            }
+        }
+    }
+
+    private function syncProductImages($product, $ext, $syncConnectionName, $schema)
+    {
+        $conn = DB::connection($syncConnectionName);
+
+        // Prefer external Spatie media table if present
+        if ($schema->hasTable('media')) {
+            $ext_media = $conn->table('media')
+                ->where('model_id', $ext->id)
+                ->where(function ($q) {
+                    $q->where('model_type', 'like', '%Product%')
+                      ->orWhere('model_type', 'like', '%product%');
+                })->get();
+
+            if ($ext_media->isEmpty()) return;
+
+            foreach ($ext_media as $m) {
+                $fileName = $m->file_name ?? null;
+                $mediaId = $m->id ?? null;
+                if (!$fileName || !$mediaId) {
+                    Log::warning("External media row missing file_name or id for ext product {$ext->id}", ['file_name' => $fileName, 'media_id' => $mediaId]);
+                    continue;
+                }
+
+                $collection = $m->collection_name ?? 'default';
+                $disk = $m->disk ?? 'public';
+
+                // Files are stored under: public/storage/{media_id}/{filename}
+                $candidates = [
+                    base_path('../mobile-mandu/public/storage/' . $mediaId . '/' . $fileName),
+                    base_path('../mobile-mandu/storage/app/media/' . $ext->id . '/' . $mediaId . '/' . $fileName),
+                    base_path('../mobile-mandu/storage/app/public/' . $ext->id . '/' . $fileName),
+                    base_path('../mobile-mandu/storage/app/public/' . $fileName),
+                    base_path('../mobile-mandu/storage/app/' . $fileName),
+                    public_path('storage/' . $fileName),
+                ];
+
+                $foundPath = null;
+                foreach ($candidates as $p) {
+                    if (file_exists($p)) { $foundPath = $p; break; }
+                }
+
+                if ($foundPath) {
+                    // Avoid duplicate media entries
+                    $existing = $product->getMedia($collection)->where('file_name', $fileName)->first();
+                    if ($existing) {
+                        continue;
+                    }
+
+                    // Copy external file into our storage so Spatie can manage it
+                    $localDir = storage_path('app/public/synced_media/' . $product->id);
+                    if (!is_dir($localDir)) {
+                        @mkdir($localDir, 0755, true);
+                    }
+                    $destPath = $localDir . '/' . basename($fileName);
+
+                    if (!file_exists($destPath)) {
+                        try {
+                            if (!@copy($foundPath, $destPath)) {
+                                Log::warning('Failed to copy external media to local storage', ['from' => $foundPath, 'to' => $destPath]);
+                                continue;
+                            }
+                        } catch (Exception $e) {
+                            Log::warning('Exception while copying file', ['error' => $e->getMessage(), 'from' => $foundPath, 'to' => $destPath]);
+                            continue;
+                        }
+                    }
+
+                    try {
+                        $media = $product->addMedia($destPath)
+                            ->preservingOriginal()
+                            ->toMediaCollection($collection);
+                        Log::info('Successfully added media from external DB', ['product_id' => $product->id, 'media_id' => $media->id, 'file_name' => $fileName]);
+                    } catch (Exception $e) {
+                        Log::warning('Failed to add external media after copy', ['error' => $e->getMessage(), 'file_name' => $fileName]);
+                    }
+                } elseif (filter_var($fileName, FILTER_VALIDATE_URL)) {
+                    try {
+                        $media = $product->addMediaFromUrl($fileName)
+                            ->toMediaCollection($collection);
+                        Log::info('Successfully added media from external URL', ['product_id' => $product->id, 'url' => $fileName]);
+                    } catch (Exception $e) {
+                        Log::warning('Failed to add media from URL', ['error' => $e->getMessage(), 'url' => $fileName]);
+                    }
+                }
+            }
+
+            return;
+        }
+
+        // Fallback: legacy product_images table
+        if (!$schema->hasTable('product_images')) return;
+
+        $ext_images = $conn->table('product_images')->where('product_id', $ext->id)->get();
+        if ($ext_images->isEmpty()) return;
+
+        foreach ($ext_images as $img) {
+            $filename = $img->image ?? null;
+            if (!$filename) continue;
+
+            $imagePath = base_path('../mobile-mandu/storage/app/public/' . $ext->id . '/' . $filename);
+
+            if (file_exists($imagePath)) {
+                $localDir = storage_path('app/public/synced_media/' . $product->id);
+                if (!is_dir($localDir)) { @mkdir($localDir, 0755, true); }
+                $destPath = $localDir . '/' . basename($filename);
+                
+                if (!file_exists($destPath)) {
+                    if (!@copy($imagePath, $destPath)) {
+                        continue;
+                    }
+                }
+
+                try {
+                    $product->addMedia($destPath)->toMediaCollection('default');
+                } catch (Exception $e) {
+                    Log::warning('Failed to add legacy media', ['error' => $e->getMessage(), 'file_name' => $filename]);
+                }
+            } elseif (filter_var($filename, FILTER_VALIDATE_URL)) {
+                try {
+                    $product->addMediaFromUrl($filename)->toMediaCollection('default');
+                } catch (Exception $e) {
+                    Log::warning('Failed to add legacy URL media', ['error' => $e->getMessage(), 'url' => $filename]);
+                }
+            }
+        }
+    }
+
+    private function getOrCreateSpec($specId, $syncConnectionName, &$specMap)
+    {
+        if (isset($specMap[$specId])) return $specMap[$specId];
+
+        $extSpec = DB::connection($syncConnectionName)->table('specifications')->where('id', $specId)->first();
+        if (!$extSpec) return null;
+
+        $localSpec = Specification::firstOrCreate(['name' => $extSpec->name]);
+        $specMap[$specId] = $localSpec->id;
+        return $localSpec->id;
     }
 
     // endregion
@@ -634,7 +992,7 @@ class ProductController extends Controller
             }
         }
         if (empty($sku_parts)) {
-            throw new \Exception("Failed to generate SKU. Missing required specifications.");
+            throw new Exception("Failed to generate SKU. Missing required specifications.");
         }
         return implode('-', $sku_parts);
     }
