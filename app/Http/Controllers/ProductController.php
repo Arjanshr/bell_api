@@ -528,6 +528,7 @@ class ProductController extends Controller
     private function syncProductImages($product, $ext, $syncConnectionName, $schema)
     {
         $conn = DB::connection($syncConnectionName);
+        $externalStoragePath = env('SYNC_EXTERNAL_STORAGE_PATH');
 
         // Prefer external Spatie media table if present
         if ($schema->hasTable('media')) {
@@ -549,17 +550,18 @@ class ProductController extends Controller
                 }
 
                 $collection = $m->collection_name ?? 'default';
-                $disk = $m->disk ?? 'public';
 
-                // Files are stored under: public/storage/{media_id}/{filename}
-                $candidates = [
-                    base_path('../mobile-mandu/public/storage/' . $mediaId . '/' . $fileName),
-                    base_path('../mobile-mandu/storage/app/media/' . $ext->id . '/' . $mediaId . '/' . $fileName),
-                    base_path('../mobile-mandu/storage/app/public/' . $ext->id . '/' . $fileName),
-                    base_path('../mobile-mandu/storage/app/public/' . $fileName),
-                    base_path('../mobile-mandu/storage/app/' . $fileName),
-                    public_path('storage/' . $fileName),
-                ];
+                // Build candidates: prioritize env-based path, then fallback to relative paths
+                $candidates = [];
+                if ($externalStoragePath) {
+                    $candidates[] = $externalStoragePath . '/public/storage/' . $mediaId . '/' . $fileName;
+                    $candidates[] = $externalStoragePath . '/storage/app/media/' . $ext->id . '/' . $mediaId . '/' . $fileName;
+                    $candidates[] = $externalStoragePath . '/storage/app/public/' . $ext->id . '/' . $fileName;
+                }
+                // Fallback for localhost
+                $candidates[] = base_path('../admin.mobilemandu.com/public/storage/' . $mediaId . '/' . $fileName);
+                $candidates[] = base_path('../admin.mobilemandu.com/storage/app/media/' . $ext->id . '/' . $mediaId . '/' . $fileName);
+                $candidates[] = base_path('../admin.mobilemandu.com/storage/app/public/' . $ext->id . '/' . $fileName);
 
                 $foundPath = null;
                 foreach ($candidates as $p) {
@@ -624,7 +626,15 @@ class ProductController extends Controller
             $filename = $img->image ?? null;
             if (!$filename) continue;
 
-            $imagePath = base_path('../mobile-mandu/storage/app/public/' . $ext->id . '/' . $filename);
+            $imagePath = null;
+            if ($externalStoragePath) {
+                $imagePath = $externalStoragePath . '/storage/app/public/' . $ext->id . '/' . $filename;
+                if (!file_exists($imagePath)) {
+                    $imagePath = base_path('../admin.mobilemandu.com/storage/app/public/' . $ext->id . '/' . $filename);
+                }
+            } else {
+                $imagePath = base_path('../admin.mobilemandu.com/storage/app/public/' . $ext->id . '/' . $filename);
+            }
 
             if (file_exists($imagePath)) {
                 $localDir = storage_path('app/public/synced_media/' . $product->id);
