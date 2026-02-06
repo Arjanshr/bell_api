@@ -47,6 +47,15 @@
                 </x-button>
             </div>
         </form>
-        <x-social-links />
+
+        <!-- Register Link -->
+        <div class="mt-6 text-center">
+            <p class="text-sm text-gray-600">
+                Don't have an account?
+                <a href="{{ route('register') }}" class="font-semibold text-blue-600 hover:text-blue-700 transition-colors duration-200">
+                    Sign up here
+                </a>
+            </p>
+        </div>
     </x-authentication-card>
 </x-guest-layout>

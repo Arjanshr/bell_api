@@ -15,20 +15,36 @@
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <!-- Styles -->
+    <!-- Livewire Styles -->
     @livewireStyles
+
     <style>
-        html,
-        body {
+        html, body {
             height: 100%;
             margin: 0;
         }
     </style>
 </head>
 
-<body>
-    <div class="font-sans text-gray-900 antialiased" style="background-color: orange">
-        {{ $slot }}
+<body class="font-sans antialiased">
+
+    <!-- PAGE WRAPPER -->
+    <div class="min-h-screen flex items-center justify-center
+                bg-gradient-to-br from-orange-600 via-orange-400 to-amber-300
+                relative overflow-hidden">
+
+        <!-- Decorative glow blobs (Bell-style) -->
+        <div class="absolute -top-40 -right-40 w-[32rem] h-[32rem]
+                    bg-orange-500 opacity-20 rounded-full blur-3xl"></div>
+
+        <div class="absolute -bottom-40 -left-40 w-[32rem] h-[32rem]
+                    bg-amber-400 opacity-20 rounded-full blur-3xl"></div>
+
+        <!-- CONTENT -->
+        <div class="relative z-10 w-full px-4">
+            {{ $slot }}
+        </div>
+
     </div>
 
     @livewireScripts
